@@ -22,7 +22,17 @@ async fn main() -> Result<()> {
         }
     };
 
-    println!("creds: {:?}", conf_creds);
+    let _response = match conf_creds.get_pages().await {
+        Ok(response) => {
+            println!("{:?}",response);
+            response
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Ok(())
+        }
+    };
+
     let _ = Client::with_uri_str("mongdb://localhost:27017")
         .await
         .map_err(|e| {
