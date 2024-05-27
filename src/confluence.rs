@@ -1,8 +1,7 @@
 use dotenv::dotenv;
 use std::env;
-use std::fmt::Error;
 use reqwest;
-use reqwest::header::{ACCEPT, AUTHORIZATION};
+use reqwest::header::{ACCEPT};
 
 #[derive(Debug)]
 pub struct ConfCreds {
@@ -38,11 +37,11 @@ impl ConfCreds {
 
      pub async fn get_pages(&self) -> Result<String, String> {
         let client = reqwest::Client::new();
-        let url = format!("https://{}/wiki/api/v2/pages?body-format=storage", &self.domain);
+        let url = format!("https://{}/wiki/api/v2/pages?body-format=storage", self.get_domain());
 
         let response = client
             .get(&url)
-            .basic_auth(&self.username, Some(&self.password))
+            .basic_auth(self.get_username(), Some(self.get_password()))
             .header(ACCEPT, "application/json")
             .send()
             .await

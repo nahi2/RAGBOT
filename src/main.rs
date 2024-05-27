@@ -1,12 +1,9 @@
 mod confluence;
 
-use mongodb::{
-    //bson::{Document, doc},
-    Client,
-    // Collection
-};
+use mongodb::{bson, Client};
 use std::result;
 use crate::confluence::ConfCreds;
+use serde_json::{Value};
 
 
 type Result<T> = result::Result<T, ()>;
@@ -23,9 +20,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    let _response = match conf_creds.get_pages().await {
+    let response = match conf_creds.get_pages().await {
         Ok(response) => {
-            println!("{:?}",response);
             response
         }
         Err(e) => {
@@ -34,12 +30,34 @@ async fn main() -> Result<()> {
         }
     };
 
-    let _ = Client::with_uri_str("mongdb://localhost:27017")
+    let json_pages: Value = match serde_json::from_str(&response) {
+        Ok(val) => val,
+        Err(e) => {
+            eprintln!("Failed to parse JSON: {}", e);
+            return Ok(());
+        }
+    };
+
+    let client = Client::with_uri_str("mongodb://localhost:27017")
         .await
         .map_err(|e| {
             eprintln!("Failed to create client: {:?}", e);
         })?;
 
+    let db = client.database("ConfDatabase");
+    let collection = db.collection("ConfContent");
+    
+    let bson_doc = match bson::to_document(&json_pages) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("Failed to convert JSON to BSON: {:?}", e);
+            return Ok(());
+        }
+    };
+
+    let _ = collection.insert_one(bson_doc, None).await.map_err(|e1| {
+        eprintln!("{}", e1)
+    });
 
     Ok(())
 }
