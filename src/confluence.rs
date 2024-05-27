@@ -1,5 +1,6 @@
 use dotenv::dotenv;
 use std::env;
+use std::fmt::Error;
 use reqwest;
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 
@@ -35,20 +36,25 @@ impl ConfCreds {
         &self.password
     }
 
-     pub async fn get_pages(&self) -> Result<reqwest::Response, reqwest::Error> {
+     pub async fn get_pages(&self) -> Result<String, String> {
         let client = reqwest::Client::new();
         let url = format!("https://{}/wiki/api/v2/pages?body-format=storage", &self.domain);
 
-        let auth = format!("{}:{}", &self.username, &self.password);
-        let auth = format!("Basic {}", base64::encode(auth));
-
         let response = client
             .get(&url)
+            .basic_auth(&self.username, Some(&self.password))
             .header(ACCEPT, "application/json")
-            .header(AUTHORIZATION, auth)
             .send()
-            .await?;
+            .await
+            .map_err(|e| e.to_string())?;
 
-         Ok(response)
-    }
+         if response.status().is_success() {
+             let body = response.text().await.map_err(|e| e.to_string())?;
+             Ok(body)
+         } else {
+             let status = response.status();
+             Err(format!("Request failed with status: {}", status))
+         }
+     }
+
 }

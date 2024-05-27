@@ -8,6 +8,7 @@ use mongodb::{
 use std::result;
 use crate::confluence::ConfCreds;
 
+
 type Result<T> = result::Result<T, ()>;
 
 #[tokio::main]
