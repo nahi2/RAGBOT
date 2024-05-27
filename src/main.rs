@@ -1,14 +1,15 @@
 mod confluence;
+mod db_config;
 
-use mongodb::{bson, Client};
 use std::result;
+use actix_web::{App, HttpServer};
 use crate::confluence::ConfCreds;
-use serde_json::{Value};
+use crate::db_config::MongoDBConfig;
 
 
 type Result<T> = result::Result<T, ()>;
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> Result<()> {
     let conf_creds = match ConfCreds::set_creds() {
         Ok(creds) => {
@@ -30,34 +31,32 @@ async fn main() -> Result<()> {
         }
     };
 
-    let json_pages: Value = match serde_json::from_str(&response) {
-        Ok(val) => val,
+    let mongodb_config = match MongoDBConfig::create_config() {
+        Ok(value) => {
+            value
+        }
         Err(e) => {
-            eprintln!("Failed to parse JSON: {}", e);
-            return Ok(());
+            eprintln!("{}", e);
+            return Ok(())
         }
     };
 
-    let client = Client::with_uri_str("mongodb://localhost:27017")
+    let _ = mongodb_config.insert_page(response).await;
+
+    HttpServer::new(move || {
+        App::new()
+    })
+        .bind("127.0.0.1:8080")?
+        .run()
         .await
-        .map_err(|e| {
-            eprintln!("Failed to create client: {:?}", e);
-        })?;
-
-    let db = client.database("ConfDatabase");
-    let collection = db.collection("ConfContent");
-    
-    let bson_doc = match bson::to_document(&json_pages) {
-        Ok(doc) => doc,
-        Err(e) => {
-            eprintln!("Failed to convert JSON to BSON: {:?}", e);
-            return Ok(());
-        }
-    };
-
-    let _ = collection.insert_one(bson_doc, None).await.map_err(|e1| {
-        eprintln!("{}", e1)
-    });
 
     Ok(())
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| App::new())
+        .bind(("127.0.0.1", 8080))?
+        .run()
+        .await
 }

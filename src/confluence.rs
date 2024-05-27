@@ -2,6 +2,8 @@ use dotenv::dotenv;
 use std::env;
 use reqwest;
 use reqwest::header::{ACCEPT};
+use serde_json;
+use serde_json::Value;
 
 #[derive(Debug)]
 pub struct ConfCreds {
@@ -35,7 +37,7 @@ impl ConfCreds {
         &self.password
     }
 
-     pub async fn get_pages(&self) -> Result<String, String> {
+     pub async fn get_pages(&self) -> Result<Value, String> {
         let client = reqwest::Client::new();
         let url = format!("https://{}/wiki/api/v2/pages?body-format=storage", self.get_domain());
 
@@ -49,11 +51,13 @@ impl ConfCreds {
 
          if response.status().is_success() {
              let body = response.text().await.map_err(|e| e.to_string())?;
-             Ok(body)
+             match serde_json::from_str(&body) {
+                 Ok(v) => Ok(v),
+                 Err(e) => Err(format!("JSON Conversion failed: {}", e))
+             }
          } else {
              let status = response.status();
              Err(format!("Request failed with status: {}", status))
          }
      }
-
 }
