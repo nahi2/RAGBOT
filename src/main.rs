@@ -1,23 +1,29 @@
 mod confluence;
 mod db_config;
 
-use std::result;
-use actix_web::{App, HttpServer};
+use std::{io};
+use actix_web::{App, HttpResponse, HttpServer, get};
+use serde_json::Value;
 use crate::confluence::ConfCreds;
 use crate::db_config::MongoDBConfig;
 
-
-type Result<T> = result::Result<T, ()>;
-
 #[actix_web::main]
-async fn main() -> Result<()> {
+async fn main() -> io::Result<()> {
+    HttpServer::new(|| App::new().service(setup).service(ids))
+        .bind(("127.0.0.1", 8080))?
+        .run()
+        .await
+}
+
+#[get("/setup")]
+async fn setup() -> HttpResponse {
     let conf_creds = match ConfCreds::set_creds() {
         Ok(creds) => {
             creds
         }
         Err(e) => {
-            eprintln!("{}", e);
-            return Ok(())
+            eprintln!("failed to get confluence credentials: {}", e);
+            return HttpResponse::InternalServerError().finish()
         }
     };
 
@@ -27,9 +33,20 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Ok(())
+            return HttpResponse::Unauthorized().finish()
         }
     };
+
+    let response_parsed = match response["results"].as_array() {
+        None => {
+            eprintln!("failed to parse confluence results");
+            return HttpResponse::InternalServerError().finish()
+        }
+        Some(val) => {
+            val
+        }
+    };
+
 
     let mongodb_config = match MongoDBConfig::create_config() {
         Ok(value) => {
@@ -37,26 +54,35 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Ok(())
+            return HttpResponse::InternalServerError().finish()
         }
     };
 
-    let _ = mongodb_config.insert_page(response).await;
-
-    HttpServer::new(move || {
-        App::new()
-    })
-        .bind("127.0.0.1:8080")?
-        .run()
-        .await
-
-    Ok(())
+    match mongodb_config.insert_pages(response_parsed).await {
+        Err(e) => {
+            eprintln!("{e}");
+            HttpResponse::InternalServerError().finish()
+        }
+        _ => {
+            HttpResponse::Ok().finish()
+        }
+    }
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new())
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
+#[get("/ids")]
+async fn ids() -> HttpResponse {
+    let mongodb_config = match MongoDBConfig::create_config() {
+        Ok(value) => {
+            value
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return HttpResponse::InternalServerError().finish()
+        }
+    };
+
+    mongodb_config.get_ids().await.unwrap();
+
+    HttpResponse::Ok().finish()
 }
+

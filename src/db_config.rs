@@ -1,6 +1,9 @@
 use std::env;
+use std::fmt::format;
 use dotenv::dotenv;
-use mongodb::{bson, Client};
+use futures::TryStreamExt;
+use mongodb::{bson, Client, Collection};
+use mongodb::bson::{doc, Document};
 use serde_json::Value;
 
 pub struct MongoDBConfig {
@@ -36,23 +39,54 @@ impl MongoDBConfig{
         &self.collection
     }
 
-    pub async fn insert_page(&self, json_pages: Value) -> Result<(), String> {
+    async fn get_collection_handle(&self) -> Result<Collection<Document>, String> {
         let client = Client::with_uri_str(&self.get_url())
             .await
             .map_err(|e| format!("Failed to create client: {:?}", e))?;
-
         let db = client.database(&self.get_database());
-        let collection = db.collection(&self.get_collection());
+        Ok(db.collection(&self.get_collection()))
+    }
 
-        let bson_doc = match bson::to_document(&json_pages) {
-            Ok(doc) => doc,
-            Err(e) => {
-                return Err(format!("Failed to convert JSON to BSON: {:?}", e))
-            }
-        };
+    pub async fn insert_pages(&self, json_pages: &Vec<Value>) -> Result<(), String> {
 
-        collection.insert_one(bson_doc, None).await
+        let collection = self.get_collection_handle().await?;
+
+        let mut documents = vec![];
+        for page in json_pages {
+            match bson::to_document(&page) {
+                Ok(doc) => documents.push(doc),
+                Err(e) => {
+                    return Err(format!("Failed to convert JSON to BSON: {:?}", e))
+                }
+            };
+        }
+
+        collection.insert_many(documents, None).await
             .map_err(|e| format!("Failed to insert page: {:?}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn get_ids(&self) -> Result<(), String> {
+        // Get a handle to a collection in the database.
+        let collection = self.get_collection_handle().await?;
+
+        // Define the projection document.
+        let projection = doc! { "_id": 1, "id": 1 };
+
+        let find_options = mongodb::options::FindOptions::builder()
+            .projection(projection)
+            .build();
+
+        // Perform the find query.
+        let mut cursor = collection.find(None, find_options).await
+            .map_err(|e| format!("Failed to execute find query: {:?}", e))?;
+
+        let results_vec = vec![];
+        while let Some(result) = cursor.try_next().await
+            .map_err(|e| format!("Failed to iterate cursor: {:?}", e))? {
+            println!("{:?}", result);
+        }
 
         Ok(())
     }
