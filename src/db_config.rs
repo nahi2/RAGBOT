@@ -72,7 +72,7 @@ impl MongoDBConfig{
         let collection = self.get_collection_handle().await?;
 
         // Define the projection document.
-        let projection = doc! { "_id": 1, "id": 1 };
+        let projection = doc! { "_id": 1, "body.storage.value": 1 };
 
         let find_options = mongodb::options::FindOptions::builder()
             .projection(projection)
@@ -82,7 +82,7 @@ impl MongoDBConfig{
         let mut cursor = collection.find(None, find_options).await
             .map_err(|e| format!("Failed to execute find query: {:?}", e))?;
 
-        let results_vec = vec![];
+        // let results_vec = vec![];
         while let Some(result) = cursor.try_next().await
             .map_err(|e| format!("Failed to iterate cursor: {:?}", e))? {
             println!("{:?}", result);
