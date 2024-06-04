@@ -1,29 +1,19 @@
 mod confluence;
 mod db_config;
+mod qdrant_config;
 
-use std::{io};
-use actix_web::{App, HttpResponse, HttpServer, get};
-use serde_json::Value;
 use crate::confluence::ConfCreds;
 use crate::db_config::MongoDBConfig;
 
-#[actix_web::main]
-async fn main() -> io::Result<()> {
-    HttpServer::new(|| App::new().service(setup).service(ids))
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
-}
-
-#[get("/setup")]
-async fn setup() -> HttpResponse {
+#[tokio::main]
+async fn main() {
     let conf_creds = match ConfCreds::set_creds() {
         Ok(creds) => {
             creds
         }
         Err(e) => {
             eprintln!("failed to get confluence credentials: {}", e);
-            return HttpResponse::InternalServerError().finish()
+            return
         }
     };
 
@@ -33,14 +23,14 @@ async fn setup() -> HttpResponse {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return HttpResponse::Unauthorized().finish()
+            return
         }
     };
 
     let response_parsed = match response["results"].as_array() {
         None => {
             eprintln!("failed to parse confluence results");
-            return HttpResponse::InternalServerError().finish()
+            return
         }
         Some(val) => {
             val
@@ -54,35 +44,17 @@ async fn setup() -> HttpResponse {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return HttpResponse::InternalServerError().finish()
+            return
         }
     };
 
-    match mongodb_config.insert_pages(response_parsed).await {
-        Err(e) => {
-            eprintln!("{e}");
-            HttpResponse::InternalServerError().finish()
-        }
-        _ => {
-            HttpResponse::Ok().finish()
-        }
+    if let Err(e) = mongodb_config.insert_pages(response_parsed).await {
+        eprintln!("Failed to insert pages: {}", e);
+        return;
+    }
+
+    if let Err(e) = mongodb_config.get_content().await {
+        eprintln!("Failed to get document IDs: {}", e);
+        return;
     }
 }
-
-#[get("/ids")]
-async fn ids() -> HttpResponse {
-    let mongodb_config = match MongoDBConfig::create_config() {
-        Ok(value) => {
-            value
-        }
-        Err(e) => {
-            eprintln!("{}", e);
-            return HttpResponse::InternalServerError().finish()
-        }
-    };
-
-    mongodb_config.get_ids().await.unwrap();
-
-    HttpResponse::Ok().finish()
-}
-

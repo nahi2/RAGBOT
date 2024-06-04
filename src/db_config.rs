@@ -49,7 +49,10 @@ impl MongoDBConfig{
 
     pub async fn insert_pages(&self, json_pages: &Vec<Value>) -> Result<(), String> {
 
-        let collection = self.get_collection_handle().await?;
+        let collection = match self.get_collection_handle().await {
+            Ok(collection) => {collection}
+            Err(e) => {return Err(format!("failed to get handle {e}"))}
+        };
 
         let mut documents = vec![];
         for page in json_pages {
@@ -61,13 +64,15 @@ impl MongoDBConfig{
             };
         }
 
-        collection.insert_many(documents, None).await
-            .map_err(|e| format!("Failed to insert page: {:?}", e))?;
+        let _ = collection.insert_many(documents, None).await
+            .map_err(|e| format!("Failed to insert page: {:?}", e)).map_err(|e1| {
+            format!("Failed to insert page: {:?}", e1)
+        });
 
         Ok(())
     }
 
-    pub async fn get_ids(&self) -> Result<(), String> {
+    pub async fn get_content(&self) -> Result<(), String> {
         // Get a handle to a collection in the database.
         let collection = self.get_collection_handle().await?;
 
