@@ -1,5 +1,6 @@
 use std::env;
 use std::fmt::format;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use dotenv::dotenv;
 use futures::TryStreamExt;
 use mongodb::{bson, Client, Collection};
@@ -51,7 +52,7 @@ impl MongoDBConfig{
 
         let collection = match self.get_collection_handle().await {
             Ok(collection) => {collection}
-            Err(e) => {return Err(format!("failed to get handle {e}"))}
+            Err(e) => {return Err(format!("failed to get handle {e}"))?}
         };
 
         let mut documents = vec![];
@@ -59,20 +60,20 @@ impl MongoDBConfig{
             match bson::to_document(&page) {
                 Ok(doc) => documents.push(doc),
                 Err(e) => {
-                    return Err(format!("Failed to convert JSON to BSON: {:?}", e))
+                    return Err(format!("Failed to convert JSON to BSON: {:?}", e))?
                 }
             };
         }
 
         let _ = collection.insert_many(documents, None).await
             .map_err(|e| format!("Failed to insert page: {:?}", e)).map_err(|e1| {
-            format!("Failed to insert page: {:?}", e1)
+            return format!("Failed to insert page: {:?}", e1);
         });
 
         Ok(())
     }
 
-    pub async fn get_content(&self) -> Result<(), String> {
+    pub async fn get_content(&self) -> Result<Vec<Document>, String> {
         // Get a handle to a collection in the database.
         let collection = self.get_collection_handle().await?;
 
@@ -87,12 +88,17 @@ impl MongoDBConfig{
         let mut cursor = collection.find(None, find_options).await
             .map_err(|e| format!("Failed to execute find query: {:?}", e))?;
 
-        // let results_vec = vec![];
+        let mut results_vec = vec![];
         while let Some(result) = cursor.try_next().await
             .map_err(|e| format!("Failed to iterate cursor: {:?}", e))? {
-            println!("{:?}", result);
-        }
+            results_vec.push(result)
+        };
+        return Ok(results_vec)
+    }
 
-        Ok(())
+    pub(crate) fn hash_object_id(object_id: &bson::oid::ObjectId) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        object_id.hash(&mut hasher);
+        hasher.finish()
     }
 }
