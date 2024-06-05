@@ -1,6 +1,7 @@
 mod confluence;
 mod db_config;
 mod qdrant_config;
+mod open_ai_config;
 
 use crate::confluence::ConfCreds;
 use crate::db_config::MongoDBConfig;
