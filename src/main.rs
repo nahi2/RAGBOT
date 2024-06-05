@@ -76,8 +76,8 @@ async fn main() {
     let mut point_structs: Vec<PointStruct> = vec![];
 
     for doc in content {
-        match doc.get("_id") {
-            Some(Bson::ObjectId(id)) => {
+        match doc.get("id") {
+            Some(Bson::String(id)) => {
                 match doc.get("body") {
                     Some(Bson::Document(body)) => {
                         match body.get("storage") {
@@ -86,10 +86,10 @@ async fn main() {
                                     Some(Bson::String(value)) => {
                                         match gen_embeddings(value).await {
                                             Ok(embedding) => {
-                                                let point_id = MongoDBConfig::hash_object_id(id);
-                                                point_structs.push(PointStruct::new(point_id, embedding, Default::default()));
+                                                point_structs.push(PointStruct::new(id.parse::<u64>().unwrap(), embedding, Default::default()));
                                             },
                                             Err(e) => {
+                                                println!("{value}");
                                                 eprintln!("Failed to generate embeddings for document with id {}: {}", id, e);
                                                 return;
                                             }

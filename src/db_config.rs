@@ -78,7 +78,7 @@ impl MongoDBConfig{
         let collection = self.get_collection_handle().await?;
 
         // Define the projection document.
-        let projection = doc! { "_id": 1, "body.storage.value": 1 };
+        let projection = doc! { "id": 1, "body.storage.value": 1 };
 
         let find_options = mongodb::options::FindOptions::builder()
             .projection(projection)
@@ -94,11 +94,5 @@ impl MongoDBConfig{
             results_vec.push(result)
         };
         return Ok(results_vec)
-    }
-
-    pub(crate) fn hash_object_id(object_id: &bson::oid::ObjectId) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        object_id.hash(&mut hasher);
-        hasher.finish()
     }
 }

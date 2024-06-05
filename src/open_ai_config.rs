@@ -6,8 +6,8 @@ use openai_rust::embeddings::EmbeddingsData;
 
 pub fn get_openai_key() -> Result<String,()> {
     dotenv::dotenv().ok();
-    env::var("OPEN_AI_KEY").map_err(|err|{
-        eprintln!("Could not find confluence url")
+    env::var("OPENAI_API_KEY").map_err(|err|{
+        eprintln!("Could not find OPENAI Key")
     })
 }
 
